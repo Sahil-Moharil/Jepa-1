@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.env
+.venv
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# PyTorch
+*.pt
+*.pth
+
+# Logs & outputs
+logs/
+outputs/
+runs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Audio datasets
+data/audio/
+data/**/*.wav
+data/**/*.flac

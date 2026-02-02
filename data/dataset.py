@@ -21,13 +21,14 @@ class RealAudioDataset(Dataset):
         if len(self.files) == 0:
             raise ValueError(f"No audio files found in {audio_dir} with extensions {self.extensions}")
 
-        # Mel spectrogram transform
+        # Mel spectrogram + log scale
         self.mel_transform = torchaudio.transforms.MelSpectrogram(
             sample_rate=sample_rate,
             n_fft=512,
             hop_length=160,
             n_mels=feature_dim
         )
+        self.db_transform = torchaudio.transforms.AmplitudeToDB()
 
     def __len__(self):
         return len(self.files)
@@ -45,9 +46,13 @@ class RealAudioDataset(Dataset):
         if waveform.shape[0] > 1:
             waveform = waveform.mean(dim=0, keepdim=True)
 
-        # Compute mel spectrogram
+        # Compute log-mel spectrogram
         mel = self.mel_transform(waveform)   # [1, n_mels, time]
+        mel = self.db_transform(mel)
         mel = mel.squeeze(0).transpose(0, 1) # [time, n_mels]
+
+        # Normalize per sample
+        mel = (mel - mel.mean()) / (mel.std() + 1e-6)
 
         # Pad or truncate
         if mel.shape[0] < self.frames:
@@ -56,8 +61,8 @@ class RealAudioDataset(Dataset):
         else:
             mel = mel[:self.frames]
 
-        # Random mask for A-JEPA
-        mask = torch.rand(self.frames) > 0.5
+        # Random mask for A-JEPA (25% masked)
+        mask = torch.rand(self.frames) < 0.25
         x_context = mel.clone()
         x_context[mask] = 0
 

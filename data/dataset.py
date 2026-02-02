@@ -11,9 +11,13 @@ class RealAudioDataset(Dataset):
         self.sample_rate = sample_rate
         self.extensions = extensions
 
-        # List all files with allowed extensions
-        self.files = [os.path.join(audio_dir, f) for f in os.listdir(audio_dir) 
-                      if f.endswith(self.extensions)]
+        # Recursively collect all audio files
+        self.files = []
+        for root, _, files in os.walk(audio_dir):
+            for file in files:
+                if file.lower().endswith(self.extensions):
+                    self.files.append(os.path.join(root, file))
+
         if len(self.files) == 0:
             raise ValueError(f"No audio files found in {audio_dir} with extensions {self.extensions}")
 
@@ -37,16 +41,15 @@ class RealAudioDataset(Dataset):
             resampler = torchaudio.transforms.Resample(sr, self.sample_rate)
             waveform = resampler(waveform)
 
-        # Convert to mono if needed
+        # Convert to mono
         if waveform.shape[0] > 1:
             waveform = waveform.mean(dim=0, keepdim=True)
 
         # Compute mel spectrogram
-        mel = self.mel_transform(waveform)  # [n_mels, time_frames]
-        mel = mel.squeeze(0)                # remove channel dim if exists
-        mel = mel.transpose(0, 1)           # [time_frames, n_mels]
+        mel = self.mel_transform(waveform)   # [1, n_mels, time]
+        mel = mel.squeeze(0).transpose(0, 1) # [time, n_mels]
 
-        # Pad or truncate to fixed number of frames
+        # Pad or truncate
         if mel.shape[0] < self.frames:
             pad_len = self.frames - mel.shape[0]
             mel = torch.cat([mel, torch.zeros(pad_len, self.feature_dim)], dim=0)
@@ -56,9 +59,9 @@ class RealAudioDataset(Dataset):
         # Random mask for A-JEPA
         mask = torch.rand(self.frames) > 0.5
         x_context = mel.clone()
-        x_context[mask] = 0  # Masked positions set to 0
+        x_context[mask] = 0
 
         x_target = mel.clone()
-        x_target[~mask] = 0  # Only masked positions kept
+        x_target[~mask] = 0  # keep only masked positions
 
         return x_context, x_target
